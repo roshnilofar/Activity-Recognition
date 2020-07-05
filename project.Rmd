@@ -1,0 +1,180 @@
+---
+title: "Practical Machine Learning Project"
+author: "Roshan Nilofar Iqbal"
+date: "7/4/2020"
+output: html_document
+---
+
+# Executive Summary
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+## Data 
+
+Data
+
+The training data for this project are available here:
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here:
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+## Detailed Information
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: 
+
+  * (Class A):exactly according to the specification 
+  * (Class B): throwing the elbows to the front 
+  * (Class c): lifting the dumbbell only halfway 
+  * (Class D): lowering the dumbbell only halfway 
+  * (Class E): throwing the hips to the front 
+
+Read more: <http:/groupware.les.inf.puc-rio.br/har#ixzz4Tjqh65ze>
+
+## Aim
+
+The goal of this project is to predict the manner in which subjects did the exercise. This is the “classe” variable in the training set. The model will use the other variables to predict with. This report describes:
+* how the model is built
+* use of cross validation
+* an estimate of expected out of sample error
+
+## Reference
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human ’13). Stuttgart, Germany: ACM SIGCHI, 2013.
+
+# Getting and Cleaning Data
+
+## Loading necessary packages
+
+```{r}
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(cowplot)
+library(randomForest)
+library(RColorBrewer)
+library(rattle)
+library(e1071)
+library(rpart.plot)
+library(data.table)
+```
+
+## Loading the data
+
+```{r}
+train_url <- 'C:/Users/Iqbal/Documents/Rprog/ML/pml-training.csv'
+test_url <- 'C:/Users/Iqbal/Documents/Rprog/ML/pml-testing.csv'
+
+if(!file.exists(train_url))
+{
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", train_url)
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", test_url)
+  
+  train <- fread('C:/Users/Iqbal/Documents/Rprog/ML/pml-training.csv')
+  test <- fread('C:/Users/Iqbal/Documents/Rprog/ML/pml-testing.csv')
+
+}
+
+train <- fread('C:/Users/Iqbal/Documents/Rprog/ML/pml-training.csv')
+test <- fread('C:/Users/Iqbal/Documents/Rprog/ML/pml-testing.csv')
+
+```
+
+## Data Summary
+
+```{r}
+dim(train)
+dim(test)
+
+#summary(train)
+#summary(test)
+
+#str(train)
+#str(test)
+```
+
+# Data Preprocessing
+```{r}
+#remove first 7 columns
+train_df <- train[,8:length(colnames(train))]
+test_df <- test[,8:length(colnames(test))]
+
+set.seed(100)
+```
+
+```{r}
+#remove columns with NA's
+
+coln <- names(which(colSums(is.na(train_df))==0))
+colm <- names(which(colSums(is.na(test_df))==0))
+
+print(coln)
+print(colm)
+#coln <- as.vector(coln)
+
+#sample <- na.omit(train_df,cols=c(coln))
+
+#coln <- names(which(colSums(is.na(test_df))==0))
+#coln <- as.list(coln)
+
+train_df <- subset(train_df, ,coln)
+
+test_df <- subset(test_df, ,colm)
+
+train_df <- as.data.frame(train_df)
+test_df <- as.data.frame(test_df)
+
+#train_df<-as.data.frame(train_df)
+
+# Check for near zero variance predictors and drop them if necessary
+nzv <- nearZeroVar(train_df,saveMetrics=TRUE)
+zero_indexes <- sum(nzv$nzv)
+
+if ((zero_indexes>0)) {
+        train_df <- train_df[,nzv$nzv==FALSE]
+}
+
+data <- createDataPartition(train_df$classe, p=0.70, list=F)
+training_df <- train_df[data, ]
+validate_df <- train_df[-data, ]
+
+```
+
+# Model Training
+
+A Random Forest algorithm is a way of averaging multiple deep decision trees, trained on different parts of the same data-set, with the goal of reducing the variance. This typically produces better performance at the expense of bias and interpret-ability.
+```{r}
+tc <- trainControl(method="cv", 5)
+
+model <- train(classe ~ ., data=training_df, method="rf",trControl=tc, ntree=251)
+
+model
+```
+# Model Performance
+
+The training data is tested against the validation data. 
+```{r}
+predict <- predict(model, validate_df)
+confusionMatrix(as.factor(validate_df$classe), predict)
+```
+# Testing
+
+```{r}
+finaltests <- predict(model, test_df[, -length(names(test_df))])
+finaltests
+```
+
+# Appendix
+
+## 1. Visualization
+
+```{r}
+treeModel <- rpart(classe ~ ., data=training_df, method="class")
+fancyRpartPlot(treeModel)
+```
+
